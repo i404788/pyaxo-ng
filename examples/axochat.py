@@ -120,16 +120,16 @@ def closeWindows(stdscr):
     curses.endwin()
 
 def usage():
-    print 'Usage: ' + sys.argv[0] + ' -(s,c)'
-    print ' -s: start a chat in server mode'
-    print ' -c: start a chat in client mode'
+    print('Usage: ' + sys.argv[0] + ' -(s,c)')
+    print(' -s: start a chat in server mode')
+    print(' -c: start a chat in client mode')
     exit()
 
 def receiveThread(sock, stdscr, input_win, output_win):
     global screen_needs_update, a
     while True:
-        data = ''
-        while data[-3:] != 'EOP':
+        data = b''
+        while data[-3:] != b'EOP':
             rcv = sock.recv(1024)
             if not rcv:
                 input_win.move(0, 0)
@@ -137,11 +137,11 @@ def receiveThread(sock, stdscr, input_win, output_win):
                 input_win.refresh()
                 sys.exit()
             data = data + rcv
-        data_list = data.split('EOP')
+        data_list = data.split(b'EOP')
         lock.acquire()
         (cursory, cursorx) = input_win.getyx()
         for data in data_list:
-            if data != '':
+            if data != b'':
                 output_win.addstr(a.decrypt(data))
         input_win.move(cursory, cursorx)
         input_win.cursyncup()
@@ -177,7 +177,7 @@ def chatThread(sock):
             screen_needs_update = True
             data = data.replace('\n', '') + '\n'
             try:
-                sock.send(a.encrypt(data) + 'EOP')
+                sock.send(a.encrypt(data) + b'EOP')
             except socket.error:
                 input_win.addstr('Disconnected')
                 input_win.refresh()
@@ -198,15 +198,15 @@ if __name__ == '__main__':
     except:
         usage()
 
-    NICK = raw_input('Enter your nick: ')
-    OTHER_NICK = raw_input('Enter the nick of the other party: ')
+    NICK = input('Enter your nick: ')
+    OTHER_NICK = input('Enter the nick of the other party: ')
     mkey = getpass('Enter the master key: ')
     lock = threading.Lock()
     screen_needs_update = False
     HOST = ''
     while True:
         try:
-            PORT = raw_input('TCP port (1 for random choice, 50000 is default): ')
+            PORT = input('TCP port (1 for random choice, 50000 is default): ')
             PORT = int(PORT)
             break
         except ValueError:
@@ -216,7 +216,7 @@ if __name__ == '__main__':
         pass
     elif PORT == 1:
         PORT = 1025 + randint(0, 64510)
-        print 'PORT is ' + str(PORT)
+        print('PORT is ' + str(PORT))
 
     if mode == '-s':
         a = Axolotl(NICK,
@@ -224,12 +224,12 @@ if __name__ == '__main__':
                     dbpassphrase=None,
                     nonthreaded_sql=False)
         a.createState(other_name=OTHER_NICK,
-                      mkey=hashlib.sha256(mkey).digest(),
+                      mkey=hashlib.sha256(mkey.encode()).digest(),
                       mode=False)
-        print 'Your ratchet key is: %s' % b2a(a.state['DHRs']).strip()
-        print 'Send this to %s...' % OTHER_NICK
+        print('Your ratchet key is: %s' % b2a(a.state['DHRs']).strip())
+        print('Send this to %s...' % OTHER_NICK)
 
-        print 'Waiting for ' + OTHER_NICK + ' to connect...'
+        print('Waiting for ' + OTHER_NICK + ' to connect...')
         with socketcontext(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.bind((HOST, PORT))
             s.listen(1)
@@ -237,18 +237,18 @@ if __name__ == '__main__':
             chatThread(conn)
 
     elif mode == '-c':
-        rkey = raw_input('Enter %s\'s ratchet key: ' % OTHER_NICK)
+        rkey = input('Enter %s\'s ratchet key: ' % OTHER_NICK)
         a = Axolotl(NICK,
                     dbname=OTHER_NICK+'.db',
                     dbpassphrase=None,
                     nonthreaded_sql=False)
         a.createState(other_name=OTHER_NICK,
-                      mkey=hashlib.sha256(mkey).digest(),
+                      mkey=hashlib.sha256(mkey.encode()).digest(),
                       mode=True,
                       other_ratchetKey=a2b(rkey))
 
-        HOST = raw_input('Enter the server: ')
-        print 'Connecting to ' + HOST + '...'
+        HOST = input('Enter the server: ')
+        print('Connecting to ' + HOST + '...')
         with socketcontext(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.connect((HOST, PORT))
             chatThread(s)

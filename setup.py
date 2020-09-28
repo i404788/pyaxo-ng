@@ -7,19 +7,19 @@ import versioneer
 
 
 setup(
-    name='pyaxo',
+    name='pyaxo-ng',
     version=versioneer.get_version(),
     cmdclass=versioneer.get_cmdclass(),
     description='Python implementation of the Axolotl ratchet protocol',
-    author='David R. Andersen',
-    author_email='k0rx@RXcomm.net',
-    url='https://github.com/rxcomm/pyaxo',
+    author='Ferris Kwaijtaal',
+    url='https://github.com/i404788/pyaxo-ng',
     py_modules=[
         'pyaxo'
     ],
     install_requires=[
-        'passlib>=1.6.1',
-        'pynacl>=1.0.1',
+        'passlib>=1.7.2',
+        'pynacl>=1.4.0',
+        'diskcache>=4.1.0'
     ],
     setup_requires=[
         'pytest-runner',
