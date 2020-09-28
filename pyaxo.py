@@ -1,27 +1,3 @@
-"""
-pyaxo.py - a python implementation of the axolotl ratchet protocol.
-https://github.com/trevp/axolotl/wiki/newversion
-
-Symmetric encryption is done using the python-gnupg module.
-
-Copyright (C) 2014 by David R. Andersen <k0rx@RXcomm.net>
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License
-along with this program. If not, see <http://www.gnu.org/licenses/>.
-
-For more information, see https://github.com/rxcomm/pyaxo
-"""
-
 import errno
 import os
 import sqlite3
@@ -39,7 +15,9 @@ from nacl.encoding import Base64Encoder
 from nacl.exceptions import CryptoError
 from nacl.hash import sha256
 from nacl.public import PrivateKey, PublicKey, Box
+
 from passlib.utils.pbkdf2 import pbkdf2
+from diskcache import Cache
 
 
 ALICE_MODE = True
@@ -65,8 +43,7 @@ def sync(f):
 
 
 class Axolotl(object):
-
-    def __init__(self, name, dbname='axolotl.db', dbpassphrase='', nonthreaded_sql=True):
+    def __init__(self, name, dbname='axolotl', dbpassphrase='', nonthreaded_sql=True):
         self.name = name
         self.dbname = dbname
         self.nonthreaded_sql = nonthreaded_sql
@@ -81,10 +58,9 @@ class Axolotl(object):
         self.state['DHRs_priv'], self.state['DHRs'] = generate_keypair()
         self.handshakeKey, self.handshakePKey = generate_keypair()
         self.storeTime = 2*86400 # minimum time (seconds) to store missed ephemeral message keys
-        self.persistence = SqlitePersistence(self.dbname,
+        self.persistence = DiskCachePersistence(self.dbname,
                                              self.dbpassphrase,
-                                             self.storeTime,
-                                             self.nonthreaded_sql)
+                                             self.storeTime)
 
     @property
     def state(self):
@@ -425,7 +401,7 @@ class AxolotlConversation:
             self.keys['HKs'],
             struct.pack('>I', self.ns) + struct.pack('>I', self.pns) +
             self.keys['DHRs'])
-        msg2 = encrypt_symmetric(mk, plaintext)
+        msg2 = encrypt_symmetric(mk, plaintext.encode())
         pad_length = HEADER_LEN - len(msg1)
         pad = os.urandom(pad_length - HEADER_PAD_NUM_LEN) + chr(pad_length).encode()
         msg = msg1 + pad + msg2
@@ -541,9 +517,7 @@ class AxolotlConversation:
             print('Your Handshake key is not available')
 
     def print_state(self):
-        print
         print('Warning: saving this data to disk is insecure!')
-        print
         for key in sorted(self.keys):
              if 'priv' in key:
                  pass
@@ -576,301 +550,32 @@ class SkippedMessageKey:
         self.timestamp = timestamp
 
 
-class SqlitePersistence(object):
-    def __init__(self, dbname, dbpassphrase, store_time, nonthreaded):
-        super(SqlitePersistence, self).__init__()
-        self.lock = Lock()
+class DiskCachePersistence:
+    def __init__(self, dbname, dbpassphrase, store_time):
         self.dbname = dbname
         self.dbpassphrase = dbpassphrase
         self.store_time = store_time
-        self.nonthreaded = nonthreaded
+        self.db = Cache(dbname)
+        # TODO: create encrypted Cache with kdf dbpassphrase
+        # TODO: purge expired skippedMessageKey based on store_time
 
-        self.db = self._open_db()
-
-    def _open_db(self):
-        db = sqlite3.connect(':memory:', check_same_thread=self.nonthreaded)
-        db.row_factory = sqlite3.Row
-
-        with db:
-            try:
-                if self.dbpassphrase is not None:
-                    with open(self.dbname, 'rb') as f:
-                        crypt_sql = f.read()
-                        try:
-                            sql = decrypt_symmetric(self.dbpassphrase,
-                                                    crypt_sql)
-                        except CryptoError:
-                            print('Bad passphrase!')
-                            sys.exit(1)
-                        else:
-                            db.cursor().executescript(sql.decode())
-                else:
-                    with open(self.dbname, 'rb') as f:
-                        sql = f.read()
-                        try:
-                            db.cursor().executescript(sql.decode())
-                        except (sqlite3.OperationalError, UnicodeDecodeError):
-                            print('Bad sql! Password problem - cannot create the database.')
-                            sys.exit(1)
-            except IOError as e:
-                if e.errno == errno.ENOENT:
-                    self._create_db(db)
-                else:
-                    raise
-            else:
-                self._delete_expired_skipped_mk(db)
-        return db
-
-    def _create_db(self, db):
-        db.execute('''
-            CREATE TABLE IF NOT EXISTS
-                skipped_mk (
-                    my_identity,
-                    to_identity,
-                    HKr TEXT,
-                    mk TEXT,
-                    timestamp INTEGER)''')
-        db.execute('''
-            CREATE UNIQUE INDEX IF NOT EXISTS
-                message_keys
-            ON
-                skipped_mk (mk)''')
-        db.execute('''
-            CREATE TABLE IF NOT EXISTS
-                conversations (
-                    my_identity TEXT,
-                    other_identity TEXT,
-                    RK TEXT,
-                    HKs TEXT,
-                    HKr TEXT,
-                    NHKs TEXT,
-                    NHKr TEXT,
-                    CKs TEXT,
-                    CKr TEXT,
-                    DHIs_priv TEXT,
-                    DHIs TEXT,
-                    DHIr TEXT,
-                    DHRs_priv TEXT,
-                    DHRs TEXT,
-                    DHRr TEXT,
-                    CONVid TEXT,
-                    Ns INTEGER,
-                    Nr INTEGER,
-                    PNs INTEGER,
-                    ratchet_flag INTEGER,
-                    mode INTEGER)''')
-        db.execute('''
-            CREATE UNIQUE INDEX IF NOT EXISTS
-                conversation_route
-            ON
-                conversations (
-                    my_identity,
-                    other_identity)''')
-
-    def _delete_expired_skipped_mk(self, db):
-        timestamp = int(time())
-        rowtime = timestamp - self.store_time
-        db.execute('''
-            DELETE FROM
-                skipped_mk
-            WHERE
-                timestamp < ?''', (rowtime,))
-
-    def _commit_skipped_mk(self, conversation):
-        with self.db as db:
-            db.execute('''
-                DELETE FROM
-                    skipped_mk
-                WHERE
-                    my_identity = ? AND
-                    to_identity = ?''', (
-                        conversation.name,
-                        conversation.other_name))
-            for skipped_mk in conversation.staged_hk_mk.values():
-                db.execute('''
-                    INSERT INTO
-                        skipped_mk (
-                            my_identity,
-                            to_identity,
-                            HKr,
-                            mk,
-                            timestamp)
-                    VALUES (?, ?, ?, ?, ?)''', (
-                        conversation.name,
-                        conversation.other_name,
-                        b2a(skipped_mk.hk),
-                        b2a(skipped_mk.mk),
-                        skipped_mk.timestamp))
-
-    def _load_skipped_mk(self, name, other_name):
-        skipped_hk_mk = dict()
-        with self.db as db:
-            rows = db.execute('''
-                SELECT
-                    *
-                FROM
-                    skipped_mk
-                WHERE
-                    my_identity = ? AND
-                    to_identity = ?''', (name, other_name))
-        for row in rows:
-            mk = a2b(row['mk'])
-            skipped_hk_mk[mk] = SkippedMessageKey(mk,
-                                                  hk=a2b(row['hkr']),
-                                                  timestamp=row['timestamp'])
-        return skipped_hk_mk
-
-    def write_db(self):
-        with self.db as db:
-            sql = '\n'.join(db.iterdump())
-            if self.dbpassphrase is not None:
-                crypt_sql = encrypt_symmetric(self.dbpassphrase, sql.encode())
-                with open(self.dbname, 'wb') as f:
-                    f.write(crypt_sql)
-            else:
-                with open(self.dbname, 'w') as f:
-                    f.write(sql)
-
-    @sync
     def save_conversation(self, conversation):
-        HKs = 0 if conversation.keys['HKs'] is None else b2a(conversation.keys['HKs'])
-        HKr = 0 if conversation.keys['HKr'] is None else b2a(conversation.keys['HKr'])
-        CKs = 0 if conversation.keys['CKs'] is None else b2a(conversation.keys['CKs'])
-        CKr = 0 if conversation.keys['CKr'] is None else b2a(conversation.keys['CKr'])
-        DHIr = 0 if conversation.keys['DHIr'] is None else b2a(conversation.keys['DHIr'])
-        DHRs_priv = 0 if conversation.keys['DHRs_priv'] is None else b2a(conversation.keys['DHRs_priv'])
-        DHRs = 0 if conversation.keys['DHRs'] is None else b2a(conversation.keys['DHRs'])
-        DHRr = 0 if conversation.keys['DHRr'] is None else b2a(conversation.keys['DHRr'])
-        ratchet_flag = 1 if conversation.ratchet_flag else 0
-        mode = 1 if conversation.mode else 0
-        with self.db as db:
-            db.execute('''
-                REPLACE INTO
-                    conversations (
-                        my_identity,
-                        other_identity,
-                        RK,
-                        HKS,
-                        HKr,
-                        NHKs,
-                        NHKr,
-                        CKs,
-                        CKr,
-                        DHIs_priv,
-                        DHIs,
-                        DHIr,
-                        DHRs_priv,
-                        DHRs,
-                        DHRr,
-                        CONVid,
-                        Ns,
-                        Nr,
-                        PNs,
-                        ratchet_flag,
-                        mode)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                        ?, ?, ?)''', (
-                    conversation.name,
-                    conversation.other_name,
-                    b2a(conversation.keys['RK']),
-                    HKs,
-                    HKr,
-                    b2a(conversation.keys['NHKs']),
-                    b2a(conversation.keys['NHKr']),
-                    CKs,
-                    CKr,
-                    b2a(conversation.keys['DHIs_priv']),
-                    b2a(conversation.keys['DHIs']),
-                    DHIr,
-                    DHRs_priv,
-                    DHRs,
-                    DHRr,
-                    b2a(conversation.keys['CONVid']),
-                    conversation.ns,
-                    conversation.nr,
-                    conversation.pns,
-                    ratchet_flag,
-                    mode))
-        self._commit_skipped_mk(conversation)
-        self.write_db()
+        return self.db.set(f'conv:{conversation.name}-{conversation.other_name}', prefix='conv', tag='conv', retry=True)
 
-    @sync
     def load_conversation(self, axolotl, name, other_name):
-        with self.db as db:
-            cur = db.cursor()
-            cur.execute('''
-                SELECT
-                    *
-                FROM
-                    conversations
-                WHERE
-                    my_identity = ? AND
-                    other_identity = ?''', (name, other_name))
-            row = cur.fetchone()
-        if row:
-            keys = \
-                    { 'name': row['my_identity'],
-                        'other_name': row['other_identity'],
-                        'RK': a2b(row['rk']),
-                        'NHKs': a2b(row['nhks']),
-                        'NHKr': a2b(row['nhkr']),
-                        'DHIs_priv': a2b(row['dhis_priv']),
-                        'DHIs': a2b(row['dhis']),
-                        'CONVid': a2b(row['convid']),
-                        'Ns': row['ns'],
-                        'Nr': row['nr'],
-                        'PNs': row['pns'],
-                    }
-            keys['HKs'] = None if row['hks'] == '0' else a2b(row['hks'])
-            keys['HKr'] = None if row['hkr'] == '0' else a2b(row['hkr'])
-            keys['CKs'] = None if row['cks'] == '0' else a2b(row['cks'])
-            keys['CKr'] = None if row['ckr'] == '0' else a2b(row['ckr'])
-            keys['DHIr'] = None if row['dhir'] == '0' else a2b(row['dhir'])
-            keys['DHRs_priv'] = None if row['dhrs_priv'] == '0' else a2b(row['dhrs_priv'])
-            keys['DHRs'] = None if row['dhrs'] == '0' else a2b(row['dhrs'])
-            keys['DHRr'] = None if row['dhrr'] == '0' else a2b(row['dhrr'])
-            ratchet_flag = row['ratchet_flag']
-            keys['ratchet_flag'] = True if ratchet_flag == 1 \
-                                                else False
-            mode = row['mode']
-            mode = True if mode == 1 else False
+        return self.db.get(f'conv:{conversation.name}-{conversation.other_name}', None)
 
-            skipped_hk_mk = self._load_skipped_mk(name, other_name)
+    def delete_conversation(self, name, other_name):
+        return self.db.pop(f'conv:{conversation.name}-{conversation.other_name}', None)
 
-            # exit at first match
-            return AxolotlConversation(axolotl, keys, mode, skipped_hk_mk)
-        else:
-            # if no matches
-            return None
-
-    @sync
-    def delete_conversation(self, conversation):
-        with self.db as db:
-            db.execute('''
-                DELETE FROM
-                    skipped_mk
-                WHERE
-                    to_identity = ?''', (conversation.other_name,))
-            db.execute('''
-                DELETE FROM
-                    conversations
-                WHERE
-                    other_identity = ?''', (conversation.other_name,))
-        self.write_db()
-
-    @sync
     def get_other_names(self, name):
-        with self.db as db:
-            rows = db.execute('''
-                SELECT
-                    other_identity
-                FROM
-                    conversations
-                WHERE
-                    my_identity = ?''', (name,))
-            return [row['other_identity'] for row in rows]
+        names = []
+        for k in self.db:
+            if k.startswith('conv:'):
+                names.append(self.db[k].other_name)
+        return names
 
-
+     
 def a2b(a):
     return Base64Encoder.decode(a)
 
