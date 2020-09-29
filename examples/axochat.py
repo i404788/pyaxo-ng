@@ -177,7 +177,7 @@ def chatThread(sock):
             screen_needs_update = True
             data = data.replace('\n', '') + '\n'
             try:
-                sock.send(a.encrypt(data) + b'EOP')
+                sock.send(a.encrypt(data.encode()) + b'EOP')
             except socket.error:
                 input_win.addstr('Disconnected')
                 input_win.refresh()

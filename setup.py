@@ -21,9 +21,6 @@ setup(
         'pynacl>=1.4.0',
         'diskcache>=4.1.0'
     ],
-    setup_requires=[
-        'pytest-runner',
-    ],
     tests_require=[
         'pytest',
     ],

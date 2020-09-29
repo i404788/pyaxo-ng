@@ -1,4 +1,3 @@
-import errno
 import os
 import sys
 import struct
@@ -18,7 +17,6 @@ from Crypto.Hash import SHA512, SHA256
 from Crypto.Cipher import AES
 from Crypto.Random import get_random_bytes
 from diskcache import Cache
-
 
 ALICE_MODE = True
 BOB_MODE = False
@@ -77,14 +75,6 @@ class Axolotl(object):
     def mode(self, mode):
         self.conversation.mode = mode
 
-    @property
-    def db(self):
-        return self.persistence.db
-
-    @db.setter
-    def db(self, db):
-        self.persistence.db = db
-
     def tripleDH(self, a, a0, B, B0):
         if self.mode == None:
             raise Exception("Can't create stat without mode")
@@ -92,9 +82,6 @@ class Axolotl(object):
 
     def genDH(self, a, B):
         return generate_dh(a, B)
-
-    def genKey(self):
-        return generate_keypair()
 
     def initState(self, other_name, other_identityKey, other_handshakeKey,
                   other_ratchetKey, verify=True):
@@ -395,6 +382,7 @@ class AxolotlConversation:
         pad_length = ord(pad)
         msg1 = msg[:HEADER_LEN-pad_length]
 
+        # Check through skipped keys for out-of-order messages
         body = self._try_skipped_mk(msg, pad_length)
         if body and body != '':
             return body
@@ -529,10 +517,10 @@ class DiskCachePersistence:
         return self.db.set(f'conv:{conversation.name}-{conversation.other_name}', prefix='conv', tag='conv', retry=True)
 
     def load_conversation(self, axolotl, name, other_name):
-        return self.db.get(f'conv:{conversation.name}-{conversation.other_name}', None)
+        return self.db.get(f'conv:{conversation.name}-{conversation.other_name}', None, retry=True)
 
     def delete_conversation(self, name, other_name):
-        return self.db.pop(f'conv:{conversation.name}-{conversation.other_name}', None)
+        return self.db.pop(f'conv:{conversation.name}-{conversation.other_name}', None, retry=True)
 
     def get_other_names(self, name):
         names = []
@@ -585,7 +573,7 @@ def generate_3dh(a, a0, b, b0, mode=ALICE_MODE):
 def encrypt_symmetric(key, plaintext):
     nonce = get_random_bytes(16)
     cipher = AES.new(key, AES.MODE_SIV, nonce=nonce)
-    ciphertext, tag = cipher.encrypt_and_digest(bytes(plaintext))
+    ciphertext, tag = cipher.encrypt_and_digest(plaintext)
     assert len(nonce) == 16
     assert len(tag) == 16
     return nonce + tag + ciphertext
