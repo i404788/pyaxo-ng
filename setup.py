@@ -7,14 +7,14 @@ import versioneer
 
 
 setup(
-    name='pyaxo-ng',
+    name='pyaxo_ng',
     version=versioneer.get_version(),
     cmdclass=versioneer.get_cmdclass(),
     description='Python implementation of the Axolotl ratchet protocol',
     author='Ferris Kwaijtaal',
     url='https://github.com/i404788/pyaxo-ng',
     py_modules=[
-        'pyaxo'
+        'pyaxo_ng'
     ],
     install_requires=[
         'pycryptodome>=3.9.8',

@@ -8,7 +8,7 @@ import curses
 from curses.textpad import Textbox
 from random import randint
 from contextlib import contextmanager
-from pyaxo import Axolotl
+from pyaxo_ng import Axolotl
 from time import sleep
 from getpass import getpass
 from binascii import a2b_base64 as a2b
@@ -221,8 +221,7 @@ if __name__ == '__main__':
     if mode == '-s':
         a = Axolotl(NICK,
                     dbname=OTHER_NICK+'.db',
-                    dbpassphrase=None,
-                    nonthreaded_sql=False)
+                    dbpassphrase=None)
         a.createState(other_name=OTHER_NICK,
                       mkey=hashlib.sha256(mkey.encode()).digest(),
                       mode=False)
@@ -240,8 +239,7 @@ if __name__ == '__main__':
         rkey = input('Enter %s\'s ratchet key: ' % OTHER_NICK)
         a = Axolotl(NICK,
                     dbname=OTHER_NICK+'.db',
-                    dbpassphrase=None,
-                    nonthreaded_sql=False)
+                    dbpassphrase=None)
         a.createState(other_name=OTHER_NICK,
                       mkey=hashlib.sha256(mkey.encode()).digest(),
                       mode=True,

@@ -1,10 +1,10 @@
 from collections import namedtuple
-from Queue import Queue
+from queue import Queue
 from threading import Event, Thread
 
 import pytest
 
-from pyaxo import Axolotl
+from pyaxo_ng import Axolotl
 
 
 def test_init_conversation(axolotl_a, axolotl_b,
@@ -14,25 +14,25 @@ def test_init_conversation(axolotl_a, axolotl_b,
                            exchange):
     conv_a = axolotl_a.init_conversation(
         axolotl_b.name,
-        priv_identity_key=a_identity_keys.priv,
-        identity_key=a_identity_keys.pub,
-        priv_handshake_key=a_handshake_keys.priv,
-        other_identity_key=b_identity_keys.pub,
-        other_handshake_key=b_handshake_keys.pub,
-        priv_ratchet_key=a_ratchet_keys.priv,
-        ratchet_key=a_ratchet_keys.pub,
-        other_ratchet_key=b_ratchet_keys.pub)
+        priv_identity_key=a_identity_keys[0],
+        identity_key=a_identity_keys[1],
+        priv_handshake_key=a_handshake_keys[0],
+        other_identity_key=b_identity_keys[1],
+        other_handshake_key=b_handshake_keys[1],
+        priv_ratchet_key=a_ratchet_keys[0],
+        ratchet_key=a_ratchet_keys[1],
+        other_ratchet_key=b_ratchet_keys[1])
 
     conv_b = axolotl_b.init_conversation(
         axolotl_a.name,
-        priv_identity_key=b_identity_keys.priv,
-        identity_key=b_identity_keys.pub,
-        priv_handshake_key=b_handshake_keys.priv,
-        other_identity_key=a_identity_keys.pub,
-        other_handshake_key=a_handshake_keys.pub,
-        priv_ratchet_key=b_ratchet_keys.priv,
-        ratchet_key=b_ratchet_keys.pub,
-        other_ratchet_key=a_ratchet_keys.pub)
+        priv_identity_key=b_identity_keys[0],
+        identity_key=b_identity_keys[1],
+        priv_handshake_key=b_handshake_keys[0],
+        other_identity_key=a_identity_keys[1],
+        other_handshake_key=a_handshake_keys[1],
+        priv_ratchet_key=b_ratchet_keys[0],
+        ratchet_key=b_ratchet_keys[1],
+        other_ratchet_key=a_ratchet_keys[1])
 
     exchange(conv_a, conv_b)
 
@@ -72,26 +72,26 @@ def test_create_conversation(axolotl_a, axolotl_b,
                              a_handshake_keys, b_handshake_keys,
                              a_ratchet_keys, b_ratchet_keys,
                              exchange):
-    mkey = 'masterkey'
+    mkey = b'masterkey'
 
     conv_a = axolotl_a.create_conversation(
         other_name=axolotl_b.name,
         mkey=mkey,
         mode=True,
-        priv_identity_key=a_identity_keys.priv,
-        identity_key=a_identity_keys.pub,
-        other_identity_key=b_identity_keys.pub,
-        other_ratchet_key=b_ratchet_keys.pub)
+        priv_identity_key=a_identity_keys[0],
+        identity_key=a_identity_keys[1],
+        other_identity_key=b_identity_keys[1],
+        other_ratchet_key=b_ratchet_keys[1])
 
     conv_b = axolotl_b.create_conversation(
         other_name=axolotl_a.name,
         mkey=mkey,
         mode=False,
-        priv_identity_key=b_identity_keys.priv,
-        identity_key=b_identity_keys.pub,
-        other_identity_key=a_identity_keys.pub,
-        priv_ratchet_key=b_ratchet_keys.priv,
-        ratchet_key=b_ratchet_keys.pub)
+        priv_identity_key=b_identity_keys[0],
+        identity_key=b_identity_keys[1],
+        other_identity_key=a_identity_keys[1],
+        priv_ratchet_key=b_ratchet_keys[0],
+        ratchet_key=b_ratchet_keys[1])
 
     exchange(conv_a, conv_b)
 
@@ -102,9 +102,9 @@ def test_create_nonthreaded_conversations(
         a_handshake_keys, b_handshake_keys, c_handshake_keys,
         a_ratchet_keys, b_ratchet_keys, c_ratchet_keys,
         exchange):
-    mkey_ab = 'masterkey_ab'
-    mkey_ac = 'masterkey_ac'
-    mkey_bc = 'masterkey_bc'
+    mkey_ab = b'masterkey_ab'
+    mkey_ac = b'masterkey_ac'
+    mkey_bc = b'masterkey_bc'
 
     conversations = create_conversations(
         axolotl_a, a_identity_keys, a_handshake_keys, a_ratchet_keys,
@@ -123,9 +123,9 @@ def test_create_threaded_conversations(
         a_handshake_keys, b_handshake_keys, c_handshake_keys,
         a_ratchet_keys, b_ratchet_keys, c_ratchet_keys,
         exchange):
-    mkey_ab = 'masterkey_ab'
-    mkey_ac = 'masterkey_ac'
-    mkey_bc = 'masterkey_bc'
+    mkey_ab = b'masterkey_ab'
+    mkey_ac = b'masterkey_ac'
+    mkey_bc = b'masterkey_bc'
 
     conversations = create_conversations(
         threaded_axolotl_a, a_identity_keys, a_handshake_keys, a_ratchet_keys,
@@ -138,17 +138,17 @@ def test_create_threaded_conversations(
 
 @pytest.fixture()
 def threaded_axolotl_a():
-    return Axolotl('Angie', dbpassphrase=None, nonthreaded_sql=False)
+    return Axolotl('Angie', dbpassphrase=None)
 
 
 @pytest.fixture()
 def threaded_axolotl_b():
-    return Axolotl('Barb', dbpassphrase=None, nonthreaded_sql=False)
+    return Axolotl('Barb', dbpassphrase=None)
 
 
 @pytest.fixture()
 def threaded_axolotl_c():
-    return Axolotl('Charlie', dbpassphrase=None, nonthreaded_sql=False)
+    return Axolotl('Charlie', dbpassphrase=None)
 
 
 class ThreadedExchange(Thread):
@@ -180,69 +180,69 @@ def initialize_conversations(
         axolotl_c, c_identity_keys, c_handshake_keys, c_ratchet_keys):
     ab = axolotl_a.init_conversation(
         other_name=axolotl_b.name,
-        priv_identity_key=a_identity_keys.priv,
-        identity_key=a_identity_keys.pub,
-        priv_handshake_key=a_handshake_keys.priv,
-        other_identity_key=b_identity_keys.pub,
-        other_handshake_key=b_handshake_keys.pub,
-        priv_ratchet_key=a_ratchet_keys.priv,
-        ratchet_key=a_ratchet_keys.pub,
-        other_ratchet_key=b_ratchet_keys.pub)
+        priv_identity_key=a_identity_keys[0],
+        identity_key=a_identity_keys[1],
+        priv_handshake_key=a_handshake_keys[0],
+        other_identity_key=b_identity_keys[1],
+        other_handshake_key=b_handshake_keys[1],
+        priv_ratchet_key=a_ratchet_keys[0],
+        ratchet_key=a_ratchet_keys[1],
+        other_ratchet_key=b_ratchet_keys[1])
 
     ac = axolotl_a.init_conversation(
         other_name=axolotl_c.name,
-        priv_identity_key=a_identity_keys.priv,
-        identity_key=a_identity_keys.pub,
-        priv_handshake_key=a_handshake_keys.priv,
-        other_identity_key=c_identity_keys.pub,
-        other_handshake_key=c_handshake_keys.pub,
-        priv_ratchet_key=a_ratchet_keys.priv,
-        ratchet_key=a_ratchet_keys.pub,
-        other_ratchet_key=c_ratchet_keys.pub)
+        priv_identity_key=a_identity_keys[0],
+        identity_key=a_identity_keys[1],
+        priv_handshake_key=a_handshake_keys[0],
+        other_identity_key=c_identity_keys[1],
+        other_handshake_key=c_handshake_keys[1],
+        priv_ratchet_key=a_ratchet_keys[0],
+        ratchet_key=a_ratchet_keys[1],
+        other_ratchet_key=c_ratchet_keys[1])
 
     ba = axolotl_b.init_conversation(
         other_name=axolotl_a.name,
-        priv_identity_key=b_identity_keys.priv,
-        identity_key=b_identity_keys.pub,
-        priv_handshake_key=b_handshake_keys.priv,
-        other_identity_key=a_identity_keys.pub,
-        other_handshake_key=a_handshake_keys.pub,
-        priv_ratchet_key=b_ratchet_keys.priv,
-        ratchet_key=b_ratchet_keys.pub,
-        other_ratchet_key=a_ratchet_keys.pub)
+        priv_identity_key=b_identity_keys[0],
+        identity_key=b_identity_keys[1],
+        priv_handshake_key=b_handshake_keys[0],
+        other_identity_key=a_identity_keys[1],
+        other_handshake_key=a_handshake_keys[1],
+        priv_ratchet_key=b_ratchet_keys[0],
+        ratchet_key=b_ratchet_keys[1],
+        other_ratchet_key=a_ratchet_keys[1])
 
     bc = axolotl_b.init_conversation(
         other_name=axolotl_c.name,
-        priv_identity_key=b_identity_keys.priv,
-        identity_key=b_identity_keys.pub,
-        priv_handshake_key=b_handshake_keys.priv,
-        other_identity_key=c_identity_keys.pub,
-        other_handshake_key=c_handshake_keys.pub,
-        priv_ratchet_key=b_ratchet_keys.priv,
-        ratchet_key=b_ratchet_keys.pub,
-        other_ratchet_key=c_ratchet_keys.pub)
+        priv_identity_key=b_identity_keys[0],
+        identity_key=b_identity_keys[1],
+        priv_handshake_key=b_handshake_keys[0],
+        other_identity_key=c_identity_keys[1],
+        other_handshake_key=c_handshake_keys[1],
+        priv_ratchet_key=b_ratchet_keys[0],
+        ratchet_key=b_ratchet_keys[1],
+        other_ratchet_key=c_ratchet_keys[1])
 
     ca = axolotl_c.init_conversation(
         other_name=axolotl_a.name,
-        priv_identity_key=c_identity_keys.priv,
-        identity_key=c_identity_keys.pub,
-        priv_handshake_key=c_handshake_keys.priv,
-        other_identity_key=a_identity_keys.pub,
-        other_handshake_key=a_handshake_keys.pub,
-        priv_ratchet_key=c_ratchet_keys.priv,
-        ratchet_key=b_ratchet_keys.pub,
-        other_ratchet_key=a_ratchet_keys.pub)
+        priv_identity_key=c_identity_keys[0],
+        identity_key=c_identity_keys[1],
+        priv_handshake_key=c_handshake_keys[0],
+        other_identity_key=a_identity_keys[1],
+        other_handshake_key=a_handshake_keys[1],
+        priv_ratchet_key=c_ratchet_keys[0],
+        ratchet_key=b_ratchet_keys[1],
+        other_ratchet_key=a_ratchet_keys[1])
 
     cb = axolotl_c.init_conversation(
         other_name=axolotl_b.name,
-        priv_identity_key=c_identity_keys.priv,
-        identity_key=c_identity_keys.pub,
-        priv_handshake_key=c_handshake_keys.priv,
-        other_identity_key=b_identity_keys.pub,
-        other_handshake_key=b_handshake_keys.pub,
-        priv_ratchet_key=c_ratchet_keys.priv,
-        ratchet_key=c_ratchet_keys.pub,
-        other_ratchet_key=b_ratchet_keys.pub)
+        priv_identity_key=c_identity_keys[0],
+        identity_key=c_identity_keys[1],
+        priv_handshake_key=c_handshake_keys[0],
+        other_identity_key=b_identity_keys[1],
+        other_handshake_key=b_handshake_keys[1],
+        priv_ratchet_key=c_ratchet_keys[0],
+        ratchet_key=c_ratchet_keys[1],
+        other_ratchet_key=b_ratchet_keys[1])
 
     return Conversations(ab, ac, ba, bc, ca, cb)
 
@@ -256,58 +256,58 @@ def create_conversations(
         other_name=axolotl_b.name,
         mkey=mkey_ab,
         mode=True,
-        priv_identity_key=a_identity_keys.priv,
-        identity_key=a_identity_keys.pub,
-        other_identity_key=b_identity_keys.pub,
-        other_ratchet_key=b_ratchet_keys.pub)
+        priv_identity_key=a_identity_keys[0],
+        identity_key=a_identity_keys[1],
+        other_identity_key=b_identity_keys[1],
+        other_ratchet_key=b_ratchet_keys[1])
 
     ac = axolotl_a.create_conversation(
         other_name=axolotl_c.name,
         mkey=mkey_ac,
         mode=False,
-        priv_identity_key=a_identity_keys.priv,
-        identity_key=a_identity_keys.pub,
-        other_identity_key=c_identity_keys.pub,
-        priv_ratchet_key=a_ratchet_keys.priv,
-        ratchet_key=a_ratchet_keys.pub)
+        priv_identity_key=a_identity_keys[0],
+        identity_key=a_identity_keys[1],
+        other_identity_key=c_identity_keys[1],
+        priv_ratchet_key=a_ratchet_keys[0],
+        ratchet_key=a_ratchet_keys[1])
 
     ba = axolotl_b.create_conversation(
         other_name=axolotl_a.name,
         mkey=mkey_ab,
         mode=False,
-        priv_identity_key=b_identity_keys.priv,
-        identity_key=b_identity_keys.pub,
-        other_identity_key=a_identity_keys.pub,
-        priv_ratchet_key=b_ratchet_keys.priv,
-        ratchet_key=b_ratchet_keys.pub)
+        priv_identity_key=b_identity_keys[0],
+        identity_key=b_identity_keys[1],
+        other_identity_key=a_identity_keys[1],
+        priv_ratchet_key=b_ratchet_keys[0],
+        ratchet_key=b_ratchet_keys[1])
 
     bc = axolotl_b.create_conversation(
         other_name=axolotl_c.name,
         mkey=mkey_bc,
         mode=True,
-        priv_identity_key=b_identity_keys.priv,
-        identity_key=b_identity_keys.pub,
-        other_identity_key=c_identity_keys.pub,
-        other_ratchet_key=c_ratchet_keys.pub)
+        priv_identity_key=b_identity_keys[0],
+        identity_key=b_identity_keys[1],
+        other_identity_key=c_identity_keys[1],
+        other_ratchet_key=c_ratchet_keys[1])
 
     ca = axolotl_c.create_conversation(
         other_name=axolotl_a.name,
         mkey=mkey_ac,
         mode=True,
-        priv_identity_key=c_identity_keys.priv,
-        identity_key=c_identity_keys.pub,
-        other_identity_key=a_identity_keys.pub,
-        other_ratchet_key=a_ratchet_keys.pub)
+        priv_identity_key=c_identity_keys[0],
+        identity_key=c_identity_keys[1],
+        other_identity_key=a_identity_keys[1],
+        other_ratchet_key=a_ratchet_keys[1])
 
     cb = axolotl_c.create_conversation(
         other_name=axolotl_b.name,
         mkey=mkey_bc,
         mode=False,
-        priv_identity_key=c_identity_keys.priv,
-        identity_key=c_identity_keys.pub,
-        other_identity_key=b_identity_keys.pub,
-        priv_ratchet_key=c_ratchet_keys.priv,
-        ratchet_key=c_ratchet_keys.pub)
+        priv_identity_key=c_identity_keys[0],
+        identity_key=c_identity_keys[1],
+        other_identity_key=b_identity_keys[1],
+        priv_ratchet_key=c_ratchet_keys[0],
+        ratchet_key=c_ratchet_keys[1])
 
     return Conversations(ab, ac, ba, bc, ca, cb)
 
