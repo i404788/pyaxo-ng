@@ -4,6 +4,14 @@ This is a fork of `<https://github.com/rxcomm/pyaxo>`_ aiming to update it to a 
 
 Check out the `py3` branch for the old `pyaxo` with python3 fixes.
 
+Notable Changes
+---------------
+* Change symmetric encryption to AES128-SIV (from XSalsa20/Poly)
+* Change KDF from pkdf2 to hkdf
+* Change datastore from sqlite3 to diskcache
+* Make everything Python3 compatible
+
+
 Overview
 --------
 The Double Ratchet Algorithm is a protocol (similar to OTR) that
