@@ -2,7 +2,6 @@ import errno
 import os
 import sys
 import struct
-from collections import namedtuple
 from functools import wraps
 from getpass import getpass
 from threading import Lock
@@ -11,7 +10,6 @@ import base64
 
 import nacl.secret
 import nacl.utils
-from nacl.exceptions import CryptoError
 from nacl.public import PrivateKey, PublicKey, Box
 
 from Crypto.Protocol.KDF import HKDF
@@ -44,10 +42,9 @@ def sync(f):
 
 
 class Axolotl(object):
-    def __init__(self, name, dbname='axolotl', dbpassphrase='', nonthreaded_sql=True):
+    def __init__(self, name, dbname='axolotl', dbpassphrase=''):
         self.name = name
         self.dbname = dbname
-        self.nonthreaded_sql = nonthreaded_sql
         if dbpassphrase is None:
             self.dbpassphrase = None
         elif dbpassphrase != '':
@@ -89,7 +86,7 @@ class Axolotl(object):
 
     def tripleDH(self, a, a0, B, B0):
         if self.mode == None:
-            sys.exit(1)
+            raise Exception("Can't create stat without mode")
         return generate_3dh(a, a0, B, B0, self.mode)
 
     def genDH(self, a, B):
@@ -154,7 +151,7 @@ class Axolotl(object):
             self.mode = mode
         else:
             if self.mode is None: # mode not selected
-                sys.exit(1)
+                raise Exception("Can't create stat without mode")
 
         self.conversation = self.create_conversation(other_name,
                                                      mkey,
@@ -232,12 +229,6 @@ class Axolotl(object):
     def encrypt(self, plaintext):
         return self.conversation.encrypt(plaintext)
 
-    def enc(self, key, plaintext):
-        return encrypt_symmetric(key, plaintext)
-
-    def dec(self, key, encrypted):
-        return decrypt_symmetric(key, encrypted)
-
     def decrypt(self, msg):
         return self.conversation.decrypt(msg)
 
@@ -246,12 +237,6 @@ class Axolotl(object):
 
     def decrypt_file(self, filename):
         self.conversation.decrypt_file(filename)
-
-    def encrypt_pipe(self):
-        self.conversation.encrypt_pipe()
-
-    def decrypt_pipe(self):
-        self.conversation.decrypt_pipe()
 
     def printKeys(self):
         self.conversation.print_keys()
@@ -263,7 +248,6 @@ class Axolotl(object):
         self.persistence.save_conversation(conversation)
 
     def loadState(self, name, other_name):
-        self.persistence.db = self.openDB()
         self.conversation = self.load_conversation(other_name, name)
         if self.conversation:
             return
@@ -280,12 +264,6 @@ class Axolotl(object):
 
     def get_other_names(self):
         return self.persistence.get_other_names(self.name)
-
-    def openDB(self):
-        return self.persistence._open_db()
-
-    def writeDB(self):
-        self.persistence.write_db()
 
     def printState(self):
         self.conversation.print_state()
@@ -366,7 +344,7 @@ class AxolotlConversation:
             try:
                 decrypt_symmetric(skipped_mk.hk, msg1)
                 body = decrypt_symmetric(skipped_mk.mk, msg2)
-            except CryptoError:
+            except (ValueError, KeyError):
                 pass
             else:
                 del self.staged_hk_mk[skipped_mk.mk]
@@ -424,24 +402,22 @@ class AxolotlConversation:
         if self.keys['HKr']:
             try:
                 header = decrypt_symmetric(self.keys['HKr'], msg1)
-            except CryptoError:
+            except (ValueError, KeyError):
                 pass
         if header and header != '':
             Np = struct.unpack('>I', header[:HEADER_COUNT_NUM_LEN])[0]
             CKp, mk = self._stage_skipped_mk(self.keys['HKr'], self.nr, Np, self.keys['CKr'])
             try:
                 body = decrypt_symmetric(mk, msg[HEADER_LEN:])
-            except CryptoError:
-                print('Undecipherable message')
-                sys.exit(1)
+            except (ValueError, KeyError):
+                raise Exception('Undecipherable message')
         else:
             try:
                 header = decrypt_symmetric(self.keys['NHKr'], msg1)
-            except CryptoError:
+            except (ValueError, KeyError):
                 pass
             if self.ratchet_flag or not header or header == '':
-                print('Undecipherable message')
-                sys.exit(1)
+                raise Exception('Undecipherable message')
             Np = struct.unpack('>I', header[:HEADER_COUNT_NUM_LEN])[0]
             PNp = struct.unpack('>I', header[HEADER_COUNT_NUM_LEN:HEADER_COUNT_NUM_LEN*2])[0]
             DHRp = header[HEADER_COUNT_NUM_LEN*2:]
@@ -454,11 +430,10 @@ class AxolotlConversation:
             CKp, mk = self._stage_skipped_mk(HKp, 0, Np, CKp)
             try:
                 body = decrypt_symmetric(mk, msg[HEADER_LEN:])
-            except CryptoError:
+            except (ValueError, KeyError):
                 pass
             if not body or body == '':
-                print('Undecipherable message')
-                sys.exit(1)
+                raise Exception('Undecipherable message')
             self.keys['RK'] = RKp
             self.keys['HKr'] = HKp
             self.keys['NHKr'] = NHKp
@@ -485,17 +460,6 @@ class AxolotlConversation:
         plaintext = self.decrypt(ciphertext)
         print(plaintext)
 
-    def encrypt_pipe(self):
-        plaintext = sys.stdin.read()
-        ciphertext = b2a(self.encrypt(plaintext)) + '\n'
-        sys.stdout.write(ciphertext)
-        sys.stdout.flush()
-
-    def decrypt_pipe(self):
-        ciphertext = a2b(sys.stdin.read())
-        plaintext = self.decrypt(ciphertext)
-        sys.stdout.write(plaintext)
-        sys.stdout.flush()
 
     def save(self):
         self._axolotl.save_conversation(self)
@@ -593,7 +557,7 @@ def hash_(data):
 def kdf(secret, salt):
     return HKDF(secret, 32, salt, SHA512, 1)
 
-
+# TODO: replace nacl implementation of ECDH?
 def generate_keypair():
     privkey = PrivateKey.generate()
     return Keypair(privkey.encode(), privkey.public_key.encode())
@@ -618,8 +582,8 @@ def generate_3dh(a, a0, b, b0, mode=ALICE_MODE):
 
 def encrypt_symmetric(key, plaintext):
     nonce = get_random_bytes(16)
-    cipher = AES.new(key[:32], AES.MODE_SIV, nonce=nonce)
-    ciphertext, tag = cipher.encrypt_and_digest(plaintext)
+    cipher = AES.new(key, AES.MODE_SIV, nonce=nonce)
+    ciphertext, tag = cipher.encrypt_and_digest(bytes(plaintext))
     assert len(nonce) == 16
     assert len(tag) == 16
     return nonce + tag + ciphertext

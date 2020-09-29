@@ -15,7 +15,7 @@ def test_init_state(axolotl_a, axolotl_b, exchange):
 
 
 def test_create_state(axolotl_a, axolotl_b, exchange):
-    mkey = 'masterkey'
+    mkey = b'masterkey'
 
     axolotl_a.createState(other_name=axolotl_b.name,
                           mkey=mkey,

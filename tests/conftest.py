@@ -1,6 +1,6 @@
 import pytest
 
-from pyaxo import Axolotl, generate_keypair
+from pyaxo_ng import Axolotl, generate_keypair
 
 from . import utils
 

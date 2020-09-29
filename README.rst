@@ -2,6 +2,7 @@ Python implementation of the Double Ratchet Algorithm.
 ======================================================
 This is a fork of `<https://github.com/rxcomm/pyaxo>`_ aiming to update it to a more maintainable state.
 
+Check out the `py3` branch for the old `pyaxo` with python3 fixes.
 
 Overview
 --------
