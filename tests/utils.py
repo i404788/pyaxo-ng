@@ -5,6 +5,8 @@ import os
 DEFAULT_DB = './axolotl.db'
 
 PLAINTEXT = 'message {}'
+def get_plaintext(i):
+    return PLAINTEXT.format(i).encode()
 
 EXCHANGE_IDS = list()
 EXCHANGES = list()
@@ -27,7 +29,7 @@ def decrypt(axolotl, i, pt, ct):
 
 
 def exchange_0(a, b):
-    pt = [PLAINTEXT.format(i) for i in range(14)]
+    pt = [get_plaintext(i) for i in range(14)]
     ct = list()
 
     encrypt(a, 0, pt, ct)
@@ -64,14 +66,14 @@ def exchange_1(a, b):
     ct = list()
 
     for i in range(n):
-        pt.append(PLAINTEXT.format(i))
+        pt.append(get_plaintext(i))
         encrypt(a, i, pt, ct)
 
     for i in range(n):
         decrypt(b, i, pt, ct)
 
     for i in range(n, n*2):
-        pt.append(PLAINTEXT.format(i))
+        pt.append(get_plaintext(i))
         encrypt(b, i, pt, ct)
 
     for i in range(n, n*2):
@@ -84,14 +86,14 @@ def exchange_2(a, b):
     ct = list()
 
     for i in range(n):
-        pt.append(PLAINTEXT.format(i))
+        pt.append(get_plaintext(i))
         encrypt(a, i, pt, ct)
 
     for i in reversed(range(n)):
         decrypt(b, i, pt, ct)
 
     for i in range(n, n*2):
-        pt.append(PLAINTEXT.format(i))
+        pt.append(get_plaintext(i))
         encrypt(b, i, pt, ct)
 
     for i in reversed(range(n, n*2)):
@@ -99,7 +101,7 @@ def exchange_2(a, b):
 
 
 def exchange_3(a, b):
-    pt = [PLAINTEXT.format(i) for i in range(6)]
+    pt = [get_plaintext(i) for i in range(6)]
     ct = list()
 
     encrypt(a, 0, pt, ct)

@@ -1,5 +1,5 @@
 from collections import namedtuple
-from Queue import Queue
+from queue import Queue
 from threading import Event, Thread
 
 import pytest

@@ -73,7 +73,7 @@ class Axolotl(object):
         if dbpassphrase is None:
             self.dbpassphrase = None
         elif dbpassphrase != '':
-            self.dbpassphrase = hash_(dbpassphrase)
+            self.dbpassphrase = hash_(dbpassphrase.encode())
         else:
             self.dbpassphrase = getpass('Database passphrase for '+ self.name + ': ').strip()
         self.conversation = AxolotlConversation(self, keys=dict(), mode=None)
@@ -124,18 +124,17 @@ class Axolotl(object):
     def initState(self, other_name, other_identityKey, other_handshakeKey,
                   other_ratchetKey, verify=True):
         if verify:
-            print 'Confirm ' + other_name + ' has identity key fingerprint:\n'
-            fingerprint = hash_(other_identityKey).encode('hex').upper()
+            print('Confirm ' + other_name + ' has identity key fingerprint:\n')
+            fingerprint = hash_(other_identityKey.encode()).encode('hex').upper()
             fprint = ''
             for i in range(0, len(fingerprint), 4):
                 fprint += fingerprint[i:i+2] + ':'
-            print fprint[:-1] + '\n'
-            print 'Be sure to verify this fingerprint with ' + other_name + \
-                  ' by some out-of-band method!'
-            print 'Otherwise, you may be subject to a Man-in-the-middle attack!\n'
+            print(fprint[:-1] + '\n')
+            print('Be sure to verify this fingerprint with ' + other_name + ' by some out-of-band method!')
+            print('Otherwise, you may be subject to a Man-in-the-middle attack!\n')
             ans = raw_input('Confirm? y/N: ').strip()
             if ans != 'y':
-                print 'Key fingerprint not confirmed - exiting...'
+                print('Key fingerprint not confirmed - exiting...')
                 sys.exit()
 
         self.conversation = self.init_conversation(other_name,
@@ -401,12 +400,12 @@ class AxolotlConversation:
         timestamp = int(time())
         ckp = ckr
         for i in range(np - nr):
-            mk = hash_(ckp + '0')
-            ckp = hash_(ckp + '1')
+            mk = hash_(ckp + b'0')
+            ckp = hash_(ckp + b'1')
             self.staged_hk_mk[mk] = SkippedMessageKey(mk, hkr, timestamp)
             self.staged = True
-        mk = hash_(ckp + '0')
-        ckp = hash_(ckp + '1')
+        mk = hash_(ckp + b'0')
+        ckp = hash_(ckp + b'1')
         return ckp, mk
 
     @sync
@@ -421,17 +420,17 @@ class AxolotlConversation:
             self.pns = self.ns
             self.ns = 0
             self.ratchet_flag = False
-        mk = hash_(self.keys['CKs'] + '0')
+        mk = hash_(self.keys['CKs'] + b'0')
         msg1 = encrypt_symmetric(
             self.keys['HKs'],
             struct.pack('>I', self.ns) + struct.pack('>I', self.pns) +
             self.keys['DHRs'])
         msg2 = encrypt_symmetric(mk, plaintext)
         pad_length = HEADER_LEN - len(msg1)
-        pad = os.urandom(pad_length - HEADER_PAD_NUM_LEN) + chr(pad_length)
+        pad = os.urandom(pad_length - HEADER_PAD_NUM_LEN) + chr(pad_length).encode()
         msg = msg1 + pad + msg2
         self.ns += 1
-        self.keys['CKs'] = hash_(self.keys['CKs'] + '1')
+        self.keys['CKs'] = hash_(self.keys['CKs'] + b'1')
         return msg
 
     @sync
@@ -456,7 +455,7 @@ class AxolotlConversation:
             try:
                 body = decrypt_symmetric(mk, msg[HEADER_LEN:])
             except CryptoError:
-                print 'Undecipherable message'
+                print('Undecipherable message')
                 sys.exit(1)
         else:
             try:
@@ -464,7 +463,7 @@ class AxolotlConversation:
             except CryptoError:
                 pass
             if self.ratchet_flag or not header or header == '':
-                print 'Undecipherable message'
+                print('Undecipherable message')
                 sys.exit(1)
             Np = struct.unpack('>I', header[:HEADER_COUNT_NUM_LEN])[0]
             PNp = struct.unpack('>I', header[HEADER_COUNT_NUM_LEN:HEADER_COUNT_NUM_LEN*2])[0]
@@ -481,7 +480,7 @@ class AxolotlConversation:
             except CryptoError:
                 pass
             if not body or body == '':
-                print 'Undecipherable message'
+                print('Undecipherable message')
                 sys.exit(1)
             self.keys['RK'] = RKp
             self.keys['HKr'] = HKp
@@ -507,7 +506,7 @@ class AxolotlConversation:
         with open(filename, 'r') as f:
             ciphertext = a2b(f.read())
         plaintext = self.decrypt(ciphertext)
-        print plaintext
+        print(plaintext)
 
     def encrypt_pipe(self):
         plaintext = sys.stdin.read()
@@ -528,46 +527,46 @@ class AxolotlConversation:
         self._axolotl.delete_conversation(self)
 
     def print_keys(self):
-        print 'Your Identity key is:\n' + b2a(self.keys['DHIs']) + '\n'
+        print('Your Identity key is:\n' + b2a(self.keys['DHIs']) + '\n')
         fingerprint = hash_(self.keys['DHIs']).encode('hex').upper()
         fprint = ''
         for i in range(0, len(fingerprint), 4):
             fprint += fingerprint[i:i+2] + ':'
-        print 'Your identity key fingerprint is: '
-        print fprint[:-1] + '\n'
-        print 'Your Ratchet key is:\n' + b2a(self.keys['DHRs']) + '\n'
+        print('Your identity key fingerprint is: ')
+        print(fprint[:-1] + '\n')
+        print('Your Ratchet key is:\n' + b2a(self.keys['DHRs']) + '\n')
         if self.handshake_key:
-            print 'Your Handshake key is:\n' + b2a(self.handshake_pkey)
+            print('Your Handshake key is:\n' + b2a(self.handshake_pkey))
         else:
-            print 'Your Handshake key is not available'
+            print('Your Handshake key is not available')
 
     def print_state(self):
         print
-        print 'Warning: saving this data to disk is insecure!'
+        print('Warning: saving this data to disk is insecure!')
         print
         for key in sorted(self.keys):
              if 'priv' in key:
                  pass
              else:
                  if self.keys[key] is None:
-                     print key + ': None'
+                     print(key + ': None')
                  elif type(self.keys[key]) is bool:
                      if self.keys[key]:
-                         print key + ': True'
+                         print(key + ': True')
                      else:
-                         print key + ': False'
+                         print(key + ': False')
                  elif type(self.keys[key]) is str:
                      try:
                          self.keys[key].decode('ascii')
-                         print key + ': ' + self.keys[key]
+                         print(key + ': ' + self.keys[key])
                      except UnicodeDecodeError:
-                         print key + ': ' + b2a(self.keys[key])
+                         print(key + ': ' + b2a(self.keys[key]))
                  else:
-                     print key + ': ' + str(self.keys[key])
+                     print(key + ': ' + str(self.keys[key]))
         if self.mode is ALICE_MODE:
-            print 'Mode: Alice'
+            print('Mode: Alice')
         else:
-            print 'Mode: Bob'
+            print('Mode: Bob')
 
 
 class SkippedMessageKey:
@@ -601,17 +600,17 @@ class SqlitePersistence(object):
                             sql = decrypt_symmetric(self.dbpassphrase,
                                                     crypt_sql)
                         except CryptoError:
-                            print 'Bad passphrase!'
+                            print('Bad passphrase!')
                             sys.exit(1)
                         else:
-                            db.cursor().executescript(sql)
+                            db.cursor().executescript(sql.decode())
                 else:
-                    with open(self.dbname, 'r') as f:
+                    with open(self.dbname, 'rb') as f:
                         sql = f.read()
                         try:
-                            db.cursor().executescript(sql)
-                        except sqlite3.OperationalError:
-                            print 'Bad sql! Password problem - cannot create the database.'
+                            db.cursor().executescript(sql.decode())
+                        except (sqlite3.OperationalError, UnicodeDecodeError):
+                            print('Bad sql! Password problem - cannot create the database.')
                             sys.exit(1)
             except IOError as e:
                 if e.errno == errno.ENOENT:
@@ -723,9 +722,9 @@ class SqlitePersistence(object):
 
     def write_db(self):
         with self.db as db:
-            sql = bytes('\n'.join(db.iterdump()))
+            sql = '\n'.join(db.iterdump())
             if self.dbpassphrase is not None:
-                crypt_sql = encrypt_symmetric(self.dbpassphrase, sql)
+                crypt_sql = encrypt_symmetric(self.dbpassphrase, sql.encode())
                 with open(self.dbname, 'wb') as f:
                     f.write(crypt_sql)
             else:
@@ -881,7 +880,7 @@ def b2a(b):
 
 
 def hash_(data):
-    return sha256(data).decode('hex')
+    return sha256(data)
 
 
 def kdf(secret, salt):
@@ -893,13 +892,13 @@ Keypair = namedtuple('Keypair', 'priv pub')
 
 def generate_keypair():
     privkey = PrivateKey.generate()
-    return Keypair(bytes(privkey), bytes(privkey.public_key))
+    return Keypair(privkey.encode(), privkey.public_key.encode())
 
 
 def generate_dh(a, b):
     a = PrivateKey(a)
     b = PublicKey(b)
-    return bytes(Box(a, b))
+    return Box(a, b).encode()
 
 
 def generate_3dh(a, a0, b, b0, mode=ALICE_MODE):
@@ -915,10 +914,10 @@ def generate_3dh(a, a0, b, b0, mode=ALICE_MODE):
 
 def encrypt_symmetric(key, plaintext):
     nonce = nacl.utils.random(nacl.secret.SecretBox.NONCE_SIZE)
-    box = nacl.secret.SecretBox(key)
-    return bytes(box.encrypt(plaintext, nonce))
+    box = nacl.secret.SecretBox(key[:32])
+    return box.encrypt(plaintext, nonce)
 
 
 def decrypt_symmetric(key, ciphertext):
-    box = nacl.secret.SecretBox(key)
+    box = nacl.secret.SecretBox(key[:32])
     return box.decrypt(ciphertext)

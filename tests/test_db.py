@@ -35,7 +35,7 @@ class TestDefaultDatabase:
                        verify=False)
 
         # get the plaintext
-        msg = 'plaintext'
+        msg = b'plaintext'
 
         # Tom encrypts it to Dick
         ciphertext = tom.encrypt(msg)
@@ -191,7 +191,7 @@ class TestIndividualDatabases:
             ratchet_key=b_ratchet_keys.pub,
             other_ratchet_key=a_ratchet_keys.pub)
 
-        pt = [utils.PLAINTEXT.format(i) for i in range(5)]
+        pt = [utils.get_plaintext(i) for i in range(5)]
         ct = list()
 
         utils.encrypt(conv_a, 0, pt, ct)
