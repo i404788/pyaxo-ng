@@ -2,6 +2,7 @@ import errno
 import os
 import sys
 import struct
+from collections import namedtuple
 from functools import wraps
 from getpass import getpass
 from threading import Lock
@@ -380,7 +381,7 @@ class AxolotlConversation:
             self.keys['HKs'],
             struct.pack('>I', self.ns) + struct.pack('>I', self.pns) +
             self.keys['DHRs'])
-        msg2 = encrypt_symmetric(mk, plaintext.encode())
+        msg2 = encrypt_symmetric(mk, plaintext)
         pad_length = HEADER_LEN - len(msg1)
         pad = os.urandom(pad_length - HEADER_PAD_NUM_LEN) + chr(pad_length).encode()
         msg = msg1 + pad + msg2
@@ -540,6 +541,7 @@ class DiskCachePersistence:
                 names.append(self.db[k].other_name)
         return names
 
+Keypair = namedtuple('Keypair', 'priv pub')
      
 def a2b(a):
     return base64.b64decode(b)
