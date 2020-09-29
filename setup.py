@@ -17,7 +17,7 @@ setup(
         'pyaxo'
     ],
     install_requires=[
-        'passlib>=1.7.2',
+        'pycryptodome>=3.9.8',
         'pynacl>=1.4.0',
         'diskcache>=4.1.0'
     ],
