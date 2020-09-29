@@ -1,6 +1,5 @@
 import errno
 import os
-import sqlite3
 import sys
 import struct
 from collections import namedtuple
@@ -8,15 +7,17 @@ from functools import wraps
 from getpass import getpass
 from threading import Lock
 from time import time
+import base64
 
 import nacl.secret
 import nacl.utils
-from nacl.encoding import Base64Encoder
 from nacl.exceptions import CryptoError
-from nacl.hash import sha256
 from nacl.public import PrivateKey, PublicKey, Box
 
-from passlib.utils.pbkdf2 import pbkdf2
+from Crypto.Protocol.KDF import HKDF
+from Crypto.Hash import SHA512, SHA256
+from Crypto.Cipher import AES
+from Crypto.Random import get_random_bytes
 from diskcache import Cache
 
 
@@ -578,27 +579,25 @@ class DiskCachePersistence:
 
      
 def a2b(a):
-    return Base64Encoder.decode(a)
-
+    return base64.b64decode(b)
 
 def b2a(b):
-    return Base64Encoder.encode(b)
+    return base64.b64encode(b)
 
 
 def hash_(data):
-    return sha256(data)
+    h = SHA256.new()
+    h.update(data)
+    return h.digest()
 
 
 def kdf(secret, salt):
-    return pbkdf2(secret, salt, rounds=10, prf='hmac-sha256')
-
-
-Keypair = namedtuple('Keypair', 'priv pub')
+    return HKDF(secret, 32, salt, SHA512, 1)
 
 
 def generate_keypair():
     privkey = PrivateKey.generate()
-    return Keypair(bytes(privkey), bytes(privkey.public_key))
+    return bytes(privkey), bytes(privkey.public_key)
 
 
 def generate_dh(a, b):
@@ -619,11 +618,15 @@ def generate_3dh(a, a0, b, b0, mode=ALICE_MODE):
 
 
 def encrypt_symmetric(key, plaintext):
-    nonce = nacl.utils.random(nacl.secret.SecretBox.NONCE_SIZE)
-    box = nacl.secret.SecretBox(key[:32])
-    return bytes(box.encrypt(plaintext, nonce))
+    nonce = get_random_bytes(16)
+    cipher = AES.new(key[:32], AES.MODE_SIV, nonce=nonce)
+    ciphertext, tag = cipher.encrypt_and_digest(plaintext)
+    assert len(nonce) == 16
+    assert len(tag) == 16
+    return nonce + tag + ciphertext
 
 
 def decrypt_symmetric(key, ciphertext):
-    box = nacl.secret.SecretBox(key[:32])
-    return box.decrypt(ciphertext)
+    cipher = AES.new(key, AES.MODE_SIV, nonce=ciphertext[:16])
+    return cipher.decrypt_and_verify(ciphertext[32:], ciphertext[16:32])
+
