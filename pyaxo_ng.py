@@ -8,8 +8,6 @@ from threading import Lock
 from time import time
 import base64
 
-import nacl.secret
-import nacl.utils
 from nacl.public import PrivateKey, PublicKey, Box
 
 from Crypto.Protocol.KDF import HKDF
@@ -50,7 +48,8 @@ class Axolotl(object):
             self.dbpassphrase = hash_(dbpassphrase.encode())
         else:
             self.dbpassphrase = getpass('Database passphrase for '+ self.name + ': ').strip()
-        self.conversation = AxolotlConversation(self, keys=dict(), mode=None)
+        self.conversation = AxolotlConversation(keys=dict(), mode=None)
+        # TODO: move to conv
         self.state['DHIs_priv'], self.state['DHIs'] = generate_keypair()
         self.state['DHRs_priv'], self.state['DHRs'] = generate_keypair()
         self.handshakeKey, self.handshakePKey = generate_keypair()
@@ -74,14 +73,6 @@ class Axolotl(object):
     @mode.setter
     def mode(self, mode):
         self.conversation.mode = mode
-
-    def tripleDH(self, a, a0, B, B0):
-        if self.mode == None:
-            raise Exception("Can't create stat without mode")
-        return generate_3dh(a, a0, B, B0, self.mode)
-
-    def genDH(self, a, B):
-        return generate_dh(a, B)
 
     def initState(self, other_name, other_identityKey, other_handshakeKey,
                   other_ratchetKey, verify=True):
@@ -212,7 +203,7 @@ class Axolotl(object):
                  'ratchet_flag': ratchet_flag,
                }
 
-        return AxolotlConversation(self, keys, mode)
+        return AxolotlConversation(keys, mode)
 
     def encrypt(self, plaintext):
         return self.conversation.encrypt(plaintext)
@@ -220,27 +211,8 @@ class Axolotl(object):
     def decrypt(self, msg):
         return self.conversation.decrypt(msg)
 
-    def encrypt_file(self, filename):
-        self.conversation.encrypt_file(filename)
-
-    def decrypt_file(self, filename):
-        self.conversation.decrypt_file(filename)
-
-    def printKeys(self):
-        self.conversation.print_keys()
-
-    def saveState(self):
-        self.save_conversation(self.conversation)
-
     def save_conversation(self, conversation):
         self.persistence.save_conversation(conversation)
-
-    def loadState(self, name, other_name):
-        self.conversation = self.load_conversation(other_name, name)
-        if self.conversation:
-            return
-        else:
-            return False
 
     def load_conversation(self, other_name, name=None):
         return self.persistence.load_conversation(self,
@@ -253,13 +225,9 @@ class Axolotl(object):
     def get_other_names(self):
         return self.persistence.get_other_names(self.name)
 
-    def printState(self):
-        self.conversation.print_state()
-
 
 class AxolotlConversation:
-    def __init__(self, axolotl, keys, mode, staged_hk_mk=None):
-        self._axolotl = axolotl
+    def __init__(self, keys, mode, staged_hk_mk=None):
         self.lock = Lock()
         self.keys = keys
         self.mode = mode
@@ -439,7 +407,7 @@ class AxolotlConversation:
             plaintext = f.read()
         ciphertext = b2a(self.encrypt(plaintext)) + '\n'
         with open(filename+'.asc', 'w') as f:
-            lines = [ciphertext[i:i+64] for i in xrange(0, len(ciphertext), 64)]
+            lines = [ciphertext[i:i+64] for i in range(0, len(ciphertext), 64)]
             for line in lines:
                 f.write(line+'\n')
 
@@ -448,13 +416,6 @@ class AxolotlConversation:
             ciphertext = a2b(f.read())
         plaintext = self.decrypt(ciphertext)
         print(plaintext)
-
-
-    def save(self):
-        self._axolotl.save_conversation(self)
-
-    def delete(self):
-        self._axolotl.delete_conversation(self)
 
     def print_keys(self):
         print('Your Identity key is:\n' + b2a(self.keys['DHIs']) + '\n')
@@ -516,10 +477,10 @@ class DiskCachePersistence:
     def save_conversation(self, conversation):
         return self.db.set(f'conv:{conversation.name}-{conversation.other_name}', prefix='conv', tag='conv', retry=True)
 
-    def load_conversation(self, axolotl, name, other_name):
+    def load_conversation(self, name, other_name):
         return self.db.get(f'conv:{conversation.name}-{conversation.other_name}', None, retry=True)
 
-    def delete_conversation(self, name, other_name):
+    def delete_conversation(self, conversation):
         return self.db.pop(f'conv:{conversation.name}-{conversation.other_name}', None, retry=True)
 
     def get_other_names(self, name):
