@@ -10,6 +10,7 @@ Notable Changes
 * Change KDF from pkdf2 to hkdf (sha512)
 * Change datastore from sqlite3 to diskcache
 * Make everything Python3 compatible
+* A large amount of code trimming/refactoring/documentation
 
 
 Overview
@@ -40,23 +41,12 @@ Make sure that you have the following::
     # If using Fedora
     sudo yum install gcc libffi-devel libsodium-devel python-devel redhat-rpm-config
 
-pyaxo also uses `pynacl`_ and `passlib`_,
-but these packages will be downloaded and installed automatically by
-`pip`_/`setuptools`_.
-
-If you use *pip*, install pyaxo with::
-
-    sudo pip install pyaxo
-
 If you use *setuptools*, change to pyaxo's source folder and install
 with::
 
     sudo python setup.py install
 
 **pyaxo will be ready for use!**
-
-If you do not use neither of those, you will have to manually install
-each dependency before running the previous command.
 
 Usage
 -----
@@ -65,19 +55,9 @@ There are several examples showing usage. There are also
 certain applications. I haven't put together an example using
 them yet, but it should be straightforward.
 
-Protocol Update
----------------
-pyaxo 0.4 was updated according to the Oct 1, 2014 version
-of the protocol, which changed the order of the ratcheting. For that
-reason, old conversations (created with pyaxo < 0.4) might not work
-properly after the update. We suggest that users update pyaxo and
-restart their conversations.
-
 Bugs, etc. should be reported to the *pyaxo* github `issues page`_.
 
-.. _`issues page`: https://github.com/rxcomm/pyaxo/issues
-.. _`passlib`: https://pypi.python.org/pypi/passlib
-.. _`pynacl`: https://pypi.python.org/pypi/PyNaCl/
+.. _`issues page`: https://github.com/i404788/pyaxo-ng/issues
 .. _`pip`: https://pypi.python.org/pypi/pip
 .. _`setuptools`: https://pypi.python.org/pypi/setuptools
 .. _`Open Whisper Systems Blog`: https://whispersystems.org/blog/advanced-ratcheting/
