@@ -12,7 +12,7 @@ import base64
 from nacl.public import PrivateKey, PublicKey, Box
 
 from Crypto.Protocol.KDF import HKDF
-from Crypto.Hash import SHA512, SHA256
+from Crypto.Hash import HMAC, SHA512, SHA256
 from Crypto.Cipher import AES
 from Crypto.Random import get_random_bytes
 from diskcache import Cache
@@ -179,7 +179,7 @@ class Axolotl(object):
             Nr = 0
             PNs = 0
             ratchet_flag = False
-        RK = kdf(mkey, SALTS['RK'])
+        RK = kdf(mkey, SALTS['RK'], info=b'RootKey')
         NHKs = kdf(mkey, SALTS['NHK'][mode])
         NHKr = kdf(mkey, SALTS['NHK'][not mode])
         CONVid = kdf(mkey, SALTS['CONVid'])
@@ -250,7 +250,7 @@ class AxolotlConversation:
 
     CONVid: Hash-Identifier for this particular conversation based on the initial shared key
 
-    Mode: Bob = initiator, Alice = recipient
+    Mode: Bob = initiator, Alice = recipient (note: this is reverse of whats used in spec)
     """
     def __init__(self, keys, mode, staged_hk_mk=None):
         self.lock = Lock()
@@ -297,6 +297,7 @@ class AxolotlConversation:
         DHRs = None 
         DHRr = None
         mode = bool(other_ratchet_key)
+        # TODO: original used kdf(mkey, DH(DHRs, DHRr))
         if mode: # alice mode
             HKs = None
             HKr = kdf(mkey, SALTS['HK'][BOB_MODE])
@@ -311,7 +312,7 @@ class AxolotlConversation:
             CKs = kdf(mkey, SALTS['CK'][BOB_MODE])
             CKr = None
             ratchet_flag = False
-        RK = kdf(mkey, SALTS['RK'])
+        RK = kdf(mkey, SALTS['RK'], info=b'RootKey')
         NHKs = kdf(mkey, SALTS['NHK'][mode])
         NHKr = kdf(mkey, SALTS['NHK'][not mode])
         CONVid = kdf(mkey, SALTS['CONVid'])
@@ -378,12 +379,12 @@ class AxolotlConversation:
         timestamp = int(time())
         ckp = ckr
         for i in range(np - nr):
-            mk = hash_(ckp + b'0')
-            ckp = hash_(ckp + b'1')
+            mk = kdf_ck(ckp, b'0')
+            ckp = kdf_ck(ckp, b'1')
             self.staged_hk_mk[mk] = SkippedMessageKey(mk, hkr, timestamp)
             self.staged = True
-        mk = hash_(ckp + b'0')
-        ckp = hash_(ckp + b'1')
+        mk = kdf_ck(ckp, b'0')
+        ckp = kdf_ck(ckp, b'1')
         return ckp, mk
 
     @sync
@@ -392,8 +393,7 @@ class AxolotlConversation:
         if self.ratchet_flag:
             self.ks['DHRs_priv'], self.ks['DHRs'] = generate_keypair()
             self.ks['HKs'] = self.ks['NHKs']
-            self.ks['RK'] = hash_(self.ks['RK'] +
-                                    generate_dh(self.ks['DHRs_priv'], self.ks['DHRr']))
+            self.ks['RK'] = kdf(generate_dh(self.ks['DHRs_priv'], self.ks['DHRr']), self.ks['RK'], info=b'RootKey')
             self.ks['NHKs'] = kdf(self.ks['RK'], SALTS['NHK'][self.mode])
             self.ks['CKs'] = kdf(self.ks['RK'], SALTS['CK'][self.mode])
             self.ks['PNs'] = self.ks['Ns']
@@ -401,7 +401,7 @@ class AxolotlConversation:
             self.ratchet_flag = False
         
         # Generate e(header, hk) & e(message, mk)
-        mk = hash_(self.ks['CKs'] + b'0')
+        mk = kdf_ck(self.ks['CKs'], b'0')
         msg1 = encrypt_symmetric(
             self.ks['HKs'],
             struct.pack('>I', self.ks['Ns']) + struct.pack('>I', self.ks['PNs']) +
@@ -411,7 +411,7 @@ class AxolotlConversation:
         pad = os.urandom(pad_length - HEADER_PAD_NUM_LEN) + chr(pad_length).encode()
         msg = msg1 + pad + msg2
         self.ks['Ns'] += 1
-        self.ks['CKs'] = hash_(self.ks['CKs'] + b'1')
+        self.ks['CKs'] = kdf_ck(self.ks['CKs'], b'1')
         return msg
 
     @sync
@@ -460,7 +460,7 @@ class AxolotlConversation:
             if self.ks['CKr']:
                 self._stage_skipped_mk(self.ks['HKr'], self.ks['Nr'], PNp, self.ks['CKr'])
             HKp = self.ks['NHKr']
-            RKp = hash_(self.ks['RK'] + generate_dh(self.ks['DHRs_priv'], DHRp))
+            RKp = kdf(generate_dh(self.ks['DHRs_priv'], DHRp), self.ks['RK'], info=b'RootKey')
             NHKp = kdf(RKp, SALTS['NHK'][not self.mode])
             CKp = kdf(RKp, SALTS['CK'][not self.mode])
             CKp, mk = self._stage_skipped_mk(HKp, 0, Np, CKp)
@@ -576,13 +576,17 @@ def b2a(b):
 
 
 def hash_(data):
-    h = SHA256.new()
-    h.update(data)
+    h = SHA256.new(data=data)
     return h.digest()
 
+# HMAC-Based for message/chain keys
+def kdf_ck(key, data):
+    h = HMAC.new(key, msg=data, digestmod=SHA512)
+    return h.digest()
 
-def kdf(secret, salt):
-    return HKDF(secret, 32, salt, SHA512, 1)
+# HKDF-Based (mainly for RK)
+def kdf(secret, salt, info=b''):
+    return HKDF(secret, 32, salt, SHA512, 1, context=info)
 
 # TODO: replace nacl implementation of ECDH?
 def generate_keypair():
