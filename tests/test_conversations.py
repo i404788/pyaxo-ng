@@ -36,6 +36,11 @@ def test_init_conversation(axolotl_a, axolotl_b,
 
     exchange(conv_a, conv_b)
 
+    o = b'Test msg'
+    c = conv_a.encrypt(o)
+    p = conv_b.decrypt(c)
+    assert o == p
+    assert c != o and c != p
 
 def test_init_nonthreaded_conversations(
         axolotl_a, axolotl_b, axolotl_c,

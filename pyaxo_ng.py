@@ -1,6 +1,7 @@
 import os
 import sys
 import struct
+from typing import NamedTuple
 from collections import namedtuple
 from functools import wraps
 from getpass import getpass
@@ -29,6 +30,9 @@ HEADER_LEN = 84
 HEADER_PAD_NUM_LEN = 1
 HEADER_COUNT_NUM_LEN = 4
 
+class Keypair(NamedTuple):
+    priv: bytes
+    pub: bytes
 
 def sync(f):
     @wraps(f)
@@ -59,8 +63,7 @@ class Axolotl(object):
         self.handshakeKey, self.handshakePKey = generate_keypair()
         self.storeTime = 2*86400 # minimum time (seconds) to store missed ephemeral message keys
         self.persistence = DiskCachePersistence(self.dbname,
-                                             self.dbpassphrase,
-                                             self.storeTime)
+                                             self.dbpassphrase)
 
     @property
     def state(self):
@@ -228,27 +231,27 @@ class Axolotl(object):
         return self.persistence.get_other_names(self.name)
 
 
-# TODO: create DHI in manager (used for dh/fingerprint, should be outside of conv)
-"""
-Implementation of DoubleRatchet w/ header encryption
-Specifics: AES128-SIV, HKDF(SHA512), SHA256
-
-DHRs: DH Ratchet key pair (the "sending" or "self" ratchet key)
-DHRr: DH Ratchet public key (the "received" or "remote" key)
-RK: 32-byte Root Keys
-CKs, CKr: 32-byte Chain Keys for sending and receiving
-Ns, Nr: Message numbers for sending and receiving
-PN: Number of messages in previous sending chain
-MKSKIPPED: Dictionary of skipped-over message keys, indexed by ratchet public key and message number. Raises an exception if too many elements are stored.
-
-HKs, HKr: Header keys for sending and receiving
-NHKs, NHKr: Next header keys for sending and receiving
-
-CONVid: Hash-Identifier for this particular conversation based on the initial shared key
-
-Mode: Bob = initiator, Alice = recipient
-"""
+# TODO: create DHI in manager (used for x3dh/fingerprint, should be outside of conv)
 class AxolotlConversation:
+    """
+    Implementation of DoubleRatchet w/ header encryption
+    Specifics: AES128-SIV, HKDF(SHA512), SHA256
+
+    DHRs: DH Ratchet key pair (the "sending" or "self" ratchet key)
+    DHRr: DH Ratchet public key (the "received" or "remote" key)
+    RK: 32-byte Root Keys
+    CKs, CKr: 32-byte Chain Keys for sending and receiving
+    Ns, Nr: Message numbers for sending and receiving
+    PN: Number of messages in previous sending chain
+    MKSKIPPED: Dictionary of skipped-over message keys, indexed by ratchet public key and message number. Raises an exception if too many elements are stored.
+
+    HKs, HKr: Header keys for sending and receiving
+    NHKs, NHKr: Next header keys for sending and receiving
+
+    CONVid: Hash-Identifier for this particular conversation based on the initial shared key
+
+    Mode: Bob = initiator, Alice = recipient
+    """
     def __init__(self, keys, mode, staged_hk_mk=None):
         self.lock = Lock()
         self.ks = keys
@@ -262,7 +265,31 @@ class AxolotlConversation:
         self.handshake_pkey = None
 
     @classmethod
-    def new_from_mkey(cls, mkey, other_ratchet_key=None):
+    def new_from_x3dh(cls, mode=ALICE_MODE, DHI: Keypair = None, HSK: Keypair = None):
+        """
+        Create new conversation from X3DH exchange
+
+        Returns
+        -------
+        (tuple(keys), callable(resolve(keysr)))
+        """
+        DHR = None if mode else generate_keypair()
+        DHI_priv, DHIs = DHI or generate_keypair()
+        HSK_priv, HSKs = HSK or generate_keypair() # handshake keys
+
+        def resolve(DHIr, HSKr, DHRr=None):
+            mkey = generate_3dh(DHI_priv, HSK_priv,
+                                DHIr, HSKr,
+                                mode)
+            return cls.new_from_mkey(mkey, DHRr, DHR=DHR)
+
+        if not mode:
+            return (DHIs, HSKs, DHR.pub), resolve
+        else:
+            return (DHIs, HSKs), resolve
+
+    @classmethod
+    def new_from_mkey(cls, mkey, other_ratchet_key = None, DHR: Keypair = None):
         Ns = 0
         Nr = 0
         PNs = 0
@@ -278,7 +305,7 @@ class AxolotlConversation:
             DHRr = other_ratchet_key
             ratchet_flag = True
         else: # bob mode
-            DHRs_priv, DHRs = generate_keypair()
+            DHRs_priv, DHRs = DHR or generate_keypair()
             HKs = kdf(mkey, SALTS['HK'][BOB_MODE])
             HKr = None
             CKs = kdf(mkey, SALTS['CK'][BOB_MODE])
@@ -289,8 +316,7 @@ class AxolotlConversation:
         NHKr = kdf(mkey, SALTS['NHK'][not mode])
         CONVid = kdf(mkey, SALTS['CONVid'])
 
-        keys = { 'name': self.name,
-                 'other_name': other_name,
+        keys = { 
                  'RK': RK,
                  'HKs': HKs,
                  'HKr': HKr,
@@ -309,21 +335,22 @@ class AxolotlConversation:
                  }
         return cls(keys, mode)
 
+    # TODO: remove (only here for compat)
     @property
     def name(self):
-        return self.ks['name']
+        return 'Self' 
 
     @name.setter
     def name(self, name):
-        self.ks['name'] = name
+        pass
 
     @property
     def other_name(self):
-        return self.ks['other_name']
+        return 'Other'
 
     @other_name.setter
     def other_name(self, other_name):
-        self.ks['other_name'] = other_name
+        pass
 
     @property
     def ratchet_flag(self):
@@ -540,9 +567,7 @@ class DiskCachePersistence:
             if k.startswith('conv:'):
                 names.append(self.db[k].other_name)
         return names
-
-Keypair = namedtuple('Keypair', 'priv pub')
-     
+ 
 def a2b(a):
     return base64.b64decode(b)
 
@@ -572,14 +597,13 @@ def generate_dh(a, b):
 
 
 def generate_3dh(a, a0, b, b0, mode=ALICE_MODE):
+    # Concat 3 DH keys (from 2 keypairs), feed it to KDF
     if mode is ALICE_MODE:
-        return hash_(generate_dh(a, b0) +
-                     generate_dh(a0, b) +
-                     generate_dh(a0, b0))
+        seed = generate_dh(a, b0) + generate_dh(a0, b) + generate_dh(a0, b0)
     else:
-        return hash_(generate_dh(a0, b) +
-                     generate_dh(a, b0) +
-                     generate_dh(a0, b0))
+        seed = generate_dh(a0, b) + generate_dh(a, b0) + generate_dh(a0, b0)
+
+    return kdf(seed, b'\x00' * len(seed))
 
 
 def encrypt_symmetric(key, plaintext):
