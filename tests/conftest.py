@@ -1,6 +1,6 @@
 import pytest
 
-from pyaxo_ng import Axolotl, generate_keypair
+from pyaxo_ng import generate_keypair
 
 from . import utils
 
@@ -49,22 +49,3 @@ def b_ratchet_keys():
 def c_ratchet_keys():
     return generate_keypair()
 
-
-@pytest.fixture()
-def axolotl_a():
-    return Axolotl('Angie', dbpassphrase=None)
-
-
-@pytest.fixture()
-def axolotl_b():
-    return Axolotl('Barb', dbpassphrase=None)
-
-
-@pytest.fixture()
-def axolotl_c():
-    return Axolotl('Charlie', dbpassphrase=None)
-
-
-@pytest.fixture(params=utils.EXCHANGES, ids=utils.EXCHANGE_IDS)
-def exchange(request):
-    return request.param
