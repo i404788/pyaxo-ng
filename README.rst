@@ -8,8 +8,10 @@ Notable Changes
 ---------------
 * Change symmetric encryption to AES128-SIV (from XSalsa20/Poly)
 * Change KDF from pkdf2 to hkdf (sha512)
+
   * Added `info` recommendation for KDF_RK
   * Used RK as salt, DH as input *instead* of concat (§5.2.KDF_RK)
+  
 * Change Chain/Message KDF to HMAC512 as recommended
 * Updated `3dh` to X3DH specs
 
