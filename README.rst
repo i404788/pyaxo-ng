@@ -40,6 +40,44 @@ A nice writeup of the protocol is on the `Open Whisper Systems Blog`_.
 You can find the most recent specification of the protocol
 `here <https://whispersystems.org/docs/specifications/doubleratchet/>`_.
 
+Basic Example
+-------------
+
+.. code-block:: python
+
+  from pyaxo_ng import AxolotlConversation
+
+  mkey = get_random_bytes(32) # Pre-shared (hashlib.sha256(key).digest() also possible)
+  # ---Init A---
+  a = AxolotlConversation.new_from_mkey(mkey)
+  # ---Init B---
+  b = AxolotlConversation.new_from_mkey(mkey, a.ks['DHRs'])
+
+  # ---Encrypt---
+  data = b'Test msg'
+  c = a.encrypt(data)
+  assert b.decrypt(c) == data
+
+
+X3DH in pyaxo-ng
+----------------
+Pyaxo-ng also provides an interface for X3DH unlike pyaxo.
+This can be used when first creating an 'anonymous' connection with a new remote user, like what is common in most instant messagers
+This can be used as in the following example:
+
+.. code-block:: python
+
+  rKeys, rResolve = AxolotlConversation.new_from_x3dh(mode=False) # Bob/Initiator
+  oKeys, oResolve = AxolotlConversation.new_from_x3dh(mode=True) # Alice/Recipient
+
+  rConv = rResolve(*oKeys)
+  oConv = oResolve(*rKeys)
+
+  o = b'Data'
+  c1 = rConv.encrypt(o)
+  assert oConv.decrypt(c1) == o
+
+
 Installation instructions
 -------------------------
 Make sure that you have the following::
